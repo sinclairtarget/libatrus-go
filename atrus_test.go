@@ -14,8 +14,6 @@ func TestParseAndRender(t *testing.T) {
 		t.Fatalf("parse failed with error: %v", err);
 	}
 
-	defer atrus.FreeAST(astNode)
-
 	s, err := atrus.RenderJSON(astNode)
 	if err != nil {
 		t.Fatalf("render failed with error: %v", err);
