@@ -1,0 +1,3 @@
+[submodule "vendored/libatrus"]
+	path = vendored/libatrus
+	url = git@github.com:sinclairtarget/libatrus.git
