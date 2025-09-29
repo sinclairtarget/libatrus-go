@@ -44,7 +44,18 @@ func RenderJSON(node *ASTNode) (string, error) {
 	var out *C.char
 	length := C.atrus_render_json(node.ptr, &out)
 	if length < 0 {
-		return "", errors.New("render failed")
+		return "", errors.New("render json failed")
+	}
+	defer C.free(unsafe.Pointer(out))
+
+	return C.GoStringN(out, length), nil
+}
+
+func RenderHTML(node *ASTNode) (string, error) {
+	var out *C.char
+	length := C.atrus_render_html(node.ptr, &out)
+	if length < 0 {
+		return "", errors.New("render html failed")
 	}
 	defer C.free(unsafe.Pointer(out))
 
