@@ -1,4 +1,4 @@
-//go:build !static
+//go:build !bundled_libatrus
 package atrus
 
 /*
