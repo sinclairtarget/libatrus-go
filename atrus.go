@@ -1,8 +1,6 @@
 package atrus
 
 /*
-#cgo pkg-config: libatrus
-
 #include <stdlib.h>
 #include <atrus.h>
 */
