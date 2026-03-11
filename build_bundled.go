@@ -1,4 +1,5 @@
 //go:build bundled_libatrus
+
 package atrus
 
 /*

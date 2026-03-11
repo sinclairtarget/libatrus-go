@@ -1,3 +1,4 @@
+// Go bindings for libatrus.
 package atrus
 
 /*
@@ -8,39 +9,69 @@ import "C"
 
 import (
 	"errors"
-	"runtime"
 	"unsafe"
 )
 
-type ASTNode struct {
-	ptr *C.atrus_ast_node
+type ParseLevel C.atrus_parse_option_parse_level_t
+
+const (
+	ParseLevelBlock ParseLevel = C.ATRUS_BLOCK_PARSE_LEVEL
+	ParseLevelPre              = C.ATRUS_PRE_PARSE_LEVEL
+	ParseLevelPost             = C.ATRUS_POST_PARSE_LEVEL
+)
+
+// Options for parsing.
+type ParseOpts struct {
+	ParseLevel C.atrus_parse_option_parse_level_t
 }
 
-func (n *ASTNode) Free() {
-	if n.ptr != nil {
-		C.atrus_ast_free(n.ptr)
-		n.ptr = nil
-	}
-}
-
-func ParseAST(md string) (*ASTNode, error) {
+func Parse(md string, opts ParseOpts) (*ASTNode, error) {
 	cMd := C.CString(md)
 	defer C.free(unsafe.Pointer(cMd))
 
-	var ptr *C.atrus_ast_node
-	retcode := C.atrus_ast_parse(cMd, &ptr)
+	parseOpts := C.struct_atrus_parse_opts{
+		parse_level: opts.ParseLevel,
+	}
+
+	var out *C.struct_atrus_ast_node
+	retcode := C.atrus_parse(cMd, &out, &parseOpts)
 	if retcode != 0 {
 		return nil, errors.New("parse failed")
 	}
 
-	node := &ASTNode{ ptr: ptr }
-	runtime.SetFinalizer(node, (*ASTNode).Free)
-	return node, nil
+	return NewASTNode(out), nil
 }
 
-func RenderJSON(node *ASTNode) (string, error) {
+func RenderHTML(node *ASTNode) (string, error) {
 	var out *C.char
-	length := C.atrus_render_json(node.ptr, &out)
+	length := C.atrus_render_html(&node.cNode, &out)
+	if length < 0 {
+		return "", errors.New("render html failed")
+	}
+	defer C.free(unsafe.Pointer(out))
+
+	return C.GoStringN(out, length), nil
+}
+
+type WhitespaceOption C.atrus_json_option_whitespace_t
+
+const (
+	JSONMinified WhitespaceOption = C.ATRUS_JSON_MINIFIED
+	JSONIndent2                   = C.ATRUS_JSON_INDENT_2
+	JSONIndent4                   = C.ATRUS_JSON_INDENT_4
+)
+
+type JSONOpts struct {
+	Whitespace C.atrus_json_option_whitespace_t
+}
+
+func RenderJSON(node *ASTNode, opts JSONOpts) (string, error) {
+	var out *C.char
+	renderOpts := C.struct_atrus_json_opts{
+		whitespace: opts.Whitespace,
+	}
+
+	length := C.atrus_render_json(&node.cNode, &out, &renderOpts)
 	if length < 0 {
 		return "", errors.New("render json failed")
 	}
@@ -49,13 +80,4 @@ func RenderJSON(node *ASTNode) (string, error) {
 	return C.GoStringN(out, length), nil
 }
 
-func RenderHTML(node *ASTNode) (string, error) {
-	var out *C.char
-	length := C.atrus_render_html(node.ptr, &out)
-	if length < 0 {
-		return "", errors.New("render html failed")
-	}
-	defer C.free(unsafe.Pointer(out))
-
-	return C.GoStringN(out, length), nil
-}
+// func LoadJSON(s string) (*ASTNode, error) {}
