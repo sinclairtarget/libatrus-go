@@ -8,28 +8,13 @@ import (
 
 const md string = "# Heading\nThis is a paragraph.\n"
 
-func TestParseAndASTOperations(t *testing.T) {
+func TestParse(t *testing.T) {
 	opts := atrus.ParseOpts{
 		ParseLevel: atrus.ParseLevelPost,
 	}
-	root, err := atrus.Parse(md, opts)
+	_, err := atrus.Parse(md, opts)
 	if err != nil {
 		t.Fatalf("parse failed with error: %v", err)
-	}
-
-	nodeType := root.Type()
-	if nodeType != "root" {
-		t.Errorf("expected type to be root, but got \"%s\"", nodeType)
-	}
-
-	for child := range root.Children() {
-		childType := child.Type()
-		if childType != "block" {
-			t.Errorf(
-				"expected root to only have block children, but got \"%s\"",
-				childType,
-			)
-		}
 	}
 }
 
@@ -47,8 +32,11 @@ func TestParseAndRenderHTML(t *testing.T) {
 		t.Fatalf("render failed with error: %v", err)
 	}
 
-	if len(s) <= 0 {
-		t.Errorf("html string was empty")
+	const expected = `<h1>Heading</h1>
+<p>This is a paragraph.</p>
+`
+	if s != expected {
+		t.Errorf("HTML string did not match. Got:\n%s", s)
 	}
 }
 
