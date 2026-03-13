@@ -46,7 +46,7 @@ replace github.com/sinclairtarget/libatrus-go => ../libatrus-go
 Though the second part after the `=>` depends on where you've checked out this
 repository.
 
-As an alternative to changing `go.mod`, you could also use Go workspaces.
+As an alternative to changing `go.mod`, you could use a Go workspace.
 
 ## Running Tests
 Build the vendored Zig library. Then run:
