@@ -12,6 +12,10 @@ import (
 	"unsafe"
 )
 
+func Version() string {
+	return C.GoString(C.atrus_version)
+}
+
 type ParseLevel C.atrus_parse_option_parse_level_t
 
 const (
