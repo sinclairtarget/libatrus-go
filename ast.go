@@ -115,38 +115,3 @@ func (n ASTNode) Children() iter.Seq[*ASTNode] {
 
 	return seq
 }
-
-// Returns an iterator over all nodes in the AST rooted at the given node that
-// match the given type.
-//
-// A pre-order traversal of the AST is performed and matching nodes are
-// returned in that order.
-func (n *ASTNode) All(nodeType string) iter.Seq[*ASTNode] {
-	seq := func(yield func(*ASTNode) bool) {
-		if n.Type() == nodeType {
-			if !yield(n) {
-				return
-			}
-		}
-
-		for child := range n.Children() {
-			for match := range child.All(nodeType) {
-				if !yield(match) {
-					return
-				}
-			}
-		}
-	}
-
-	return seq
-}
-
-// Returns the first node of the matching type found in AST during pre-order
-// traversal, or nil if no matching node is found.
-func (n *ASTNode) First(nodeType string) *ASTNode {
-	for match := range n.All(nodeType) {
-		return match
-	}
-
-	return nil
-}

@@ -1,7 +1,6 @@
 package atrus_test
 
 import (
-	"slices"
 	"testing"
 
 	atrus "github.com/sinclairtarget/libatrus-go"
@@ -31,27 +30,6 @@ func TestParseAndASTOperations(t *testing.T) {
 				childType,
 			)
 		}
-	}
-
-	headings := slices.Collect(root.All("heading"))
-	if len(headings) != 1 {
-		t.Errorf(
-			"expected AST to contain one heading, but found %d",
-			len(headings),
-		)
-	}
-
-	paragraph := root.First("paragraph")
-	if paragraph == nil {
-		t.Error("expected paragraph node to be non-nil but was nil")
-	}
-
-	nodeType = paragraph.Type()
-	if nodeType != "paragraph" {
-		t.Errorf(
-			"expected node to have type \"paragraph\", but got \"%s\"",
-			nodeType,
-		)
 	}
 }
 
