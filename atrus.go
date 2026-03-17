@@ -9,6 +9,7 @@ import "C"
 
 import (
 	"errors"
+	"runtime"
 	"unsafe"
 )
 
@@ -43,7 +44,15 @@ func Parse(md string, opts ParseOpts) (*ASTNode, error) {
 		return nil, errors.New("parse failed")
 	}
 
-	return NewASTNode(out), nil
+	node := NewASTNode(out)
+
+	// Set finalizer on root node.
+	// Root node is responsible for freeing the whole tree when it gets GC-ed.
+	runtime.SetFinalizer(node, func(n *ASTNode) {
+		C.atrus_free(&n.cNode)
+	})
+
+	return node, nil
 }
 
 func RenderHTML(node *ASTNode) (string, error) {

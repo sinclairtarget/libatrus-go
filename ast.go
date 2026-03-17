@@ -8,7 +8,6 @@ import "C"
 
 import (
 	"fmt"
-	"runtime"
 	"unsafe"
 )
 
@@ -20,16 +19,9 @@ type ASTNode struct {
 
 // Wraps C AST node in a Go struct.
 func NewASTNode(cNode *C.struct_atrus_ast_node) *ASTNode {
-	n := &ASTNode{
+	return &ASTNode{
 		cNode: *cNode,
 	}
-
-	// Free manually allocated memory on cleanup
-	runtime.SetFinalizer(n, func(n *ASTNode) {
-		C.atrus_free(&n.cNode)
-	})
-
-	return n
 }
 
 // Returns a type name for the node.
