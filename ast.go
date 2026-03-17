@@ -12,15 +12,13 @@ import (
 )
 
 type ASTNode struct {
-	// Copied by value into Go struct, but contains pointers to externally
-	// allocated memory regions that need to be freed manually.
-	cNode C.struct_atrus_ast_node
+	cNode *C.struct_atrus_ast_node
 }
 
 // Wraps C AST node in a Go struct.
 func NewASTNode(cNode *C.struct_atrus_ast_node) *ASTNode {
 	return &ASTNode{
-		cNode: *cNode,
+		cNode: cNode,
 	}
 }
 

@@ -49,7 +49,7 @@ func Parse(md string, opts ParseOpts) (*ASTNode, error) {
 	// Set finalizer on root node.
 	// Root node is responsible for freeing the whole tree when it gets GC-ed.
 	runtime.SetFinalizer(node, func(n *ASTNode) {
-		C.atrus_free(&n.cNode)
+		C.atrus_free(n.cNode)
 	})
 
 	return node, nil
@@ -57,7 +57,7 @@ func Parse(md string, opts ParseOpts) (*ASTNode, error) {
 
 func RenderHTML(node *ASTNode) (string, error) {
 	var out *C.char
-	length := C.atrus_render_html(&node.cNode, &out)
+	length := C.atrus_render_html(node.cNode, &out)
 	if length < 0 {
 		return "", errors.New("render html failed")
 	}
@@ -84,7 +84,7 @@ func RenderJSON(node *ASTNode, opts JSONOpts) (string, error) {
 		whitespace: opts.Whitespace,
 	}
 
-	length := C.atrus_render_json(&node.cNode, &out, &renderOpts)
+	length := C.atrus_render_json(node.cNode, &out, &renderOpts)
 	if length < 0 {
 		return "", errors.New("render json failed")
 	}
