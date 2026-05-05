@@ -12,11 +12,11 @@ import (
 )
 
 type ASTNode struct {
-	cNode *C.struct_atrus_ast_node
+	cNode *C.struct_atrus_node
 }
 
 // Wraps C AST node in a Go struct.
-func NewASTNode(cNode *C.struct_atrus_ast_node) *ASTNode {
+func NewASTNode(cNode *C.struct_atrus_node) *ASTNode {
 	return &ASTNode{
 		cNode: cNode,
 	}
@@ -27,66 +27,127 @@ func NewASTNode(cNode *C.struct_atrus_ast_node) *ASTNode {
 // These names match the type names given in the MyST spec node index:
 // https://mystmd.org/spec/myst-schema
 func (n ASTNode) Type() string {
-	switch n.cNode.tag {
-	case C.ATRUS_NODE_TYPE_ROOT:
-		return "root"
-	case C.ATRUS_NODE_TYPE_BLOCK:
-		return "block"
-	case C.ATRUS_NODE_TYPE_HEADING:
-		return "heading"
-	case C.ATRUS_NODE_TYPE_PARAGRAPH:
-		return "paragraph"
-	case C.ATRUS_NODE_TYPE_TEXT:
-		return "text"
-	case C.ATRUS_NODE_TYPE_CODE:
-		return "code"
-	case C.ATRUS_NODE_TYPE_THEMATIC_BREAK:
-		return "thematicBreak"
-	case C.ATRUS_NODE_TYPE_BREAK:
-		return "break"
-	case C.ATRUS_NODE_TYPE_EMPHASIS:
-		return "emphasis"
-	case C.ATRUS_NODE_TYPE_STRONG:
-		return "strong"
-	case C.ATRUS_NODE_TYPE_INLINE_CODE:
-		return "inlineCode"
-	case C.ATRUS_NODE_TYPE_LINK:
-		return "link"
-	case C.ATRUS_NODE_TYPE_DEFINITION:
-		return "definition"
-	case C.ATRUS_NODE_TYPE_IMAGE:
-		return "image"
-	case C.ATRUS_NODE_TYPE_BLOCKQUOTE:
-		return "blockquote"
-	default:
-		panic("unknown Atrus node type")
+	// Convert to opaque node
+	var opaqueNode *C.struct_atrus_node_opaque
+	retcode := C.atrus_adopt(n.cNode, &opaqueNode)
+	if retcode != 0 {
+		panic("adopt() failed")
 	}
+
+	name := C.atrus_name(opaqueNode)
+
+	// Get exposed node back
+	retcode = C.atrus_expose(opaqueNode, &n.cNode)
+	if retcode != 0 {
+		panic("expose() failed")
+	}
+
+	return C.GoString(name)
 }
 
 // Returns a slice containing the node's children.
 //
 // If the node has no children, or is a leaf node, just returns an empty slice.
+//
 func (n ASTNode) Children() []*ASTNode {
 	outSlice := []*ASTNode{}
 
 	payload := unsafe.Pointer(&n.cNode.payload)
 	switch n.cNode.tag {
 	case C.ATRUS_NODE_TYPE_ROOT:
-		root := (*C.struct_atrus_ast_node_root)(payload)
-		children := unsafe.Slice(root.children, root.n_children)
+		root := (*C.struct_atrus_node_root)(payload)
+		children := unsafe.Slice(root.children, root.children_len)
 
 		for _, rawChild := range children {
 			child := NewASTNode(rawChild)
 			outSlice = append(outSlice, child)
 		}
 	case C.ATRUS_NODE_TYPE_BLOCK,
-		C.ATRUS_NODE_TYPE_HEADING,
 		C.ATRUS_NODE_TYPE_PARAGRAPH,
 		C.ATRUS_NODE_TYPE_EMPHASIS,
 		C.ATRUS_NODE_TYPE_STRONG,
-		C.ATRUS_NODE_TYPE_BLOCKQUOTE:
-		container := (*C.struct_atrus_ast_node_container)(payload)
-		children := unsafe.Slice(container.children, container.n_children)
+		C.ATRUS_NODE_TYPE_BLOCKQUOTE,
+		C.ATRUS_NODE_TYPE_CAPTION,
+		C.ATRUS_NODE_TYPE_SUBSCRIPT,
+		C.ATRUS_NODE_TYPE_SUPERSCRIPT,
+		C.ATRUS_NODE_TYPE_ADMONITION_TITLE:
+		wrapper := (*C.struct_atrus_node_wrapper)(payload)
+		children := unsafe.Slice(wrapper.children, wrapper.children_len)
+
+		for _, rawChild := range children {
+			child := NewASTNode(rawChild)
+			outSlice = append(outSlice, child)
+		}
+	case C.ATRUS_NODE_TYPE_HEADING:
+		heading := (*C.struct_atrus_node_heading)(payload)
+		children := unsafe.Slice(heading.children, heading.children_len)
+
+		for _, rawChild := range children {
+			child := NewASTNode(rawChild)
+			outSlice = append(outSlice, child)
+		}
+	case C.ATRUS_NODE_TYPE_LINK:
+		link := (*C.struct_atrus_node_link)(payload)
+		children := unsafe.Slice(link.children, link.children_len)
+
+		for _, rawChild := range children {
+			child := NewASTNode(rawChild)
+			outSlice = append(outSlice, child)
+		}
+	case C.ATRUS_NODE_TYPE_CONTAINER:
+		container := (*C.struct_atrus_node_container)(payload)
+		children := unsafe.Slice(container.children, container.children_len)
+
+		for _, rawChild := range children {
+			child := NewASTNode(rawChild)
+			outSlice = append(outSlice, child)
+		}
+	case C.ATRUS_NODE_TYPE_MYST_ROLE:
+		myst_role := (*C.struct_atrus_node_myst_role)(payload)
+		children := unsafe.Slice(myst_role.children, myst_role.children_len)
+
+		for _, rawChild := range children {
+			child := NewASTNode(rawChild)
+			outSlice = append(outSlice, child)
+		}
+	case C.ATRUS_NODE_TYPE_ABBREVIATION:
+		abbreviation := (*C.struct_atrus_node_abbreviation)(payload)
+		children := unsafe.Slice(
+			abbreviation.children,
+			abbreviation.children_len,
+		)
+
+		for _, rawChild := range children {
+			child := NewASTNode(rawChild)
+			outSlice = append(outSlice, child)
+		}
+	case C.ATRUS_NODE_TYPE_MYST_DIRECTIVE:
+		myst_directive := (*C.struct_atrus_node_myst_directive)(payload)
+		children := unsafe.Slice(
+			myst_directive.children,
+			myst_directive.children_len,
+		)
+
+		for _, rawChild := range children {
+			child := NewASTNode(rawChild)
+			outSlice = append(outSlice, child)
+		}
+	case C.ATRUS_NODE_TYPE_MYST_DIRECTIVE_ERROR:
+		myst_directive_error := (*C.struct_atrus_node_myst_directive_error)(
+			payload,
+		)
+		children := unsafe.Slice(
+			myst_directive_error.children,
+			myst_directive_error.children_len,
+		)
+
+		for _, rawChild := range children {
+			child := NewASTNode(rawChild)
+			outSlice = append(outSlice, child)
+		}
+	case C.ATRUS_NODE_TYPE_ADMONITION:
+		admonition := (*C.struct_atrus_node_admonition)(payload)
+		children := unsafe.Slice(admonition.children, admonition.children_len)
 
 		for _, rawChild := range children {
 			child := NewASTNode(rawChild)
@@ -98,7 +159,9 @@ func (n ASTNode) Children() []*ASTNode {
 		C.ATRUS_NODE_TYPE_BREAK,
 		C.ATRUS_NODE_TYPE_INLINE_CODE,
 		C.ATRUS_NODE_TYPE_DEFINITION,
-		C.ATRUS_NODE_TYPE_IMAGE:
+		C.ATRUS_NODE_TYPE_IMAGE,
+		C.ATRUS_NODE_TYPE_HTML,
+		C.ATRUS_NODE_TYPE_MYST_ROLE_ERROR:
 		// Childless nodes
 		break
 	}
@@ -122,7 +185,7 @@ func (n ASTNode) Heading() Heading {
 	}
 
 	payload := unsafe.Pointer(&n.cNode.payload)
-	cHeading := (*C.struct_atrus_ast_node_heading)(payload)
+	cHeading := (*C.struct_atrus_node_heading)(payload)
 	return Heading{
 		Depth: cHeading.depth,
 	}
@@ -139,7 +202,7 @@ func (n ASTNode) Text() Text {
 	}
 
 	payload := unsafe.Pointer(&n.cNode.payload)
-	cText := (*C.struct_atrus_ast_node_text)(payload)
+	cText := (*C.struct_atrus_node_text)(payload)
 	return Text{
 		Value: C.GoString(cText.value),
 	}
@@ -148,6 +211,7 @@ func (n ASTNode) Text() Text {
 type Code struct {
 	Value string
 	Lang  string
+	ShowLineNumbers bool
 }
 
 func (n ASTNode) Code() Code {
@@ -157,10 +221,11 @@ func (n ASTNode) Code() Code {
 	}
 
 	payload := unsafe.Pointer(&n.cNode.payload)
-	cCode := (*C.struct_atrus_ast_node_code)(payload)
+	cCode := (*C.struct_atrus_node_code)(payload)
 	return Code{
 		Value: C.GoString(cCode.value),
 		Lang:  C.GoString(cCode.lang),
+		ShowLineNumbers:  bool(cCode.show_line_numbers),
 	}
 }
 
@@ -176,10 +241,31 @@ func (n ASTNode) Link() Link {
 	}
 
 	payload := unsafe.Pointer(&n.cNode.payload)
-	cLink := (*C.struct_atrus_ast_node_link)(payload)
+	cLink := (*C.struct_atrus_node_link)(payload)
 	return Link{
 		URL:   C.GoString(cLink.url),
 		Title: C.GoString(cLink.title),
+	}
+}
+
+type LinkDefinition struct {
+	URL string
+	Title string
+	Label string
+}
+
+func (n ASTNode) LinkDefinition() LinkDefinition {
+	if n.cNode.tag != C.ATRUS_NODE_TYPE_DEFINITION {
+		msg := formatTypePanicMsg("LinkDefinition()", n)
+		panic(msg) // called LinkDefinition() on an Atrus AST node of type X
+	}
+
+	payload := unsafe.Pointer(&n.cNode.payload)
+	cLinkDefinition := (*C.struct_atrus_node_link_definition)(payload)
+	return LinkDefinition{
+		URL:   C.GoString(cLinkDefinition.url),
+		Title: C.GoString(cLinkDefinition.title),
+		Label: C.GoString(cLinkDefinition.label),
 	}
 }
 
@@ -196,11 +282,136 @@ func (n ASTNode) Image() Image {
 	}
 
 	payload := unsafe.Pointer(&n.cNode.payload)
-	cImage := (*C.struct_atrus_ast_node_image)(payload)
+	cImage := (*C.struct_atrus_node_image)(payload)
 	return Image{
 		URL:   C.GoString(cImage.url),
 		Title: C.GoString(cImage.title),
 		Alt:   C.GoString(cImage.alt),
+	}
+}
+
+type Container struct {
+	Kind string
+}
+
+func (n ASTNode) Container() Container {
+	if n.cNode.tag != C.ATRUS_NODE_TYPE_CONTAINER {
+		msg := formatTypePanicMsg("Container()", n)
+		panic(msg) // called Container() on an Atrus AST node of type X
+	}
+
+	payload := unsafe.Pointer(&n.cNode.payload)
+	cContainer := (*C.struct_atrus_node_container)(payload)
+	return Container{
+		Kind: C.GoString(cContainer.kind),
+	}
+}
+
+type MySTRole struct {
+	Name string
+	Value string
+}
+
+func (n ASTNode) MySTRole() MySTRole {
+	if n.cNode.tag != C.ATRUS_NODE_TYPE_MYST_ROLE {
+		msg := formatTypePanicMsg("MySTRole()", n)
+		panic(msg) // called MySTRole() on an Atrus AST node of type X
+	}
+
+	payload := unsafe.Pointer(&n.cNode.payload)
+	cMySTRole := (*C.struct_atrus_node_myst_role)(payload)
+	return MySTRole{
+		Name:  C.GoString(cMySTRole.name),
+		Value: C.GoString(cMySTRole.value),
+	}
+}
+
+type MySTRoleError struct {
+	Value string
+}
+
+func (n ASTNode) MySTRoleError() MySTRoleError {
+	if n.cNode.tag != C.ATRUS_NODE_TYPE_MYST_ROLE_ERROR {
+		msg := formatTypePanicMsg("MySTRoleError()", n)
+		panic(msg) // called MySTRoleError() on an Atrus AST node of type X
+	}
+
+	payload := unsafe.Pointer(&n.cNode.payload)
+	cMySTRoleError := (*C.struct_atrus_node_myst_role_error)(payload)
+	return MySTRoleError{
+		Value: C.GoString(cMySTRoleError.value),
+	}
+}
+
+type Abbreviation struct {
+	Title string
+}
+
+func (n ASTNode) Abbreviation() Abbreviation {
+	if n.cNode.tag != C.ATRUS_NODE_TYPE_ABBREVIATION {
+		msg := formatTypePanicMsg("Abbreviation()", n)
+		panic(msg) // called Abbreviation() on an Atrus AST node of type X
+	}
+
+	payload := unsafe.Pointer(&n.cNode.payload)
+	cAbbreviation := (*C.struct_atrus_node_abbreviation)(payload)
+	return Abbreviation{
+		Title: C.GoString(cAbbreviation.title),
+	}
+}
+
+type MySTDirective struct {
+	Name string
+	Args string
+	Value string
+}
+
+func (n ASTNode) MySTDirective() MySTDirective {
+	if n.cNode.tag != C.ATRUS_NODE_TYPE_MYST_DIRECTIVE {
+		msg := formatTypePanicMsg("MySTDirective()", n)
+		panic(msg) // called MySTDirective() on an Atrus AST node of type X
+	}
+
+	payload := unsafe.Pointer(&n.cNode.payload)
+	cMySTDirective := (*C.struct_atrus_node_myst_directive)(payload)
+	return MySTDirective{
+		Name:  C.GoString(cMySTDirective.name),
+		Args:  C.GoString(cMySTDirective.args),
+		Value: C.GoString(cMySTDirective.value),
+	}
+}
+
+type MySTDirectiveError struct {
+	Message string
+}
+
+func (n ASTNode) MySTDirectiveError() MySTDirectiveError {
+	if n.cNode.tag != C.ATRUS_NODE_TYPE_MYST_DIRECTIVE_ERROR {
+		msg := formatTypePanicMsg("MySTDirectiveError()", n)
+		panic(msg) // called MySTDirectiveError() on an Atrus AST node of type X
+	}
+
+	payload := unsafe.Pointer(&n.cNode.payload)
+	cMySTDirectiveError := (*C.struct_atrus_node_myst_directive_error)(payload)
+	return MySTDirectiveError{
+		Message: C.GoString(cMySTDirectiveError.message),
+	}
+}
+
+type Admonition struct {
+	Kind string
+}
+
+func (n ASTNode) Admonition() Admonition {
+	if n.cNode.tag != C.ATRUS_NODE_TYPE_ADMONITION {
+		msg := formatTypePanicMsg("Admonition()", n)
+		panic(msg) // called Admonition() on an Atrus AST node of type X
+	}
+
+	payload := unsafe.Pointer(&n.cNode.payload)
+	cAdmonition := (*C.struct_atrus_node_admonition)(payload)
+	return Admonition{
+		Kind: C.GoString(cAdmonition.kind),
 	}
 }
 
