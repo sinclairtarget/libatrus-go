@@ -13,12 +13,29 @@ import (
 
 type ASTNode struct {
 	cNode *C.struct_atrus_node
+	cOpaqueNode *C.struct_atrus_node_opaque
 }
 
 // Wraps C AST node in a Go struct.
 func NewASTNode(cNode *C.struct_atrus_node) *ASTNode {
 	return &ASTNode{
 		cNode: cNode,
+		cOpaqueNode: nil,
+	}
+}
+
+func (n ASTNode) Frozen() bool {
+	return n.cNode == nil
+}
+
+func (n *ASTNode) setOpaque(opaqueNode *C.struct_atrus_node_opaque) {
+	n.cOpaqueNode = opaqueNode
+	n.cNode = nil
+}
+
+func (n ASTNode) checkFrozen() {
+	if n.Frozen() {
+		panic("invalid method called on frozen AST node")
 	}
 }
 
@@ -27,21 +44,8 @@ func NewASTNode(cNode *C.struct_atrus_node) *ASTNode {
 // These names match the type names given in the MyST spec node index:
 // https://mystmd.org/spec/myst-schema
 func (n ASTNode) Type() string {
-	// Convert to opaque node
-	var opaqueNode *C.struct_atrus_node_opaque
-	retcode := C.atrus_adopt(n.cNode, &opaqueNode)
-	if retcode != 0 {
-		panic("adopt() failed")
-	}
-
-	name := C.atrus_name(opaqueNode)
-
-	// Get exposed node back
-	retcode = C.atrus_expose(opaqueNode, &n.cNode)
-	if retcode != 0 {
-		panic("expose() failed")
-	}
-
+	n.checkFrozen()
+	name := C.atrus_name(n.cNode.tag)
 	return C.GoString(name)
 }
 
@@ -50,6 +54,8 @@ func (n ASTNode) Type() string {
 // If the node has no children, or is a leaf node, just returns an empty slice.
 //
 func (n ASTNode) Children() []*ASTNode {
+	n.checkFrozen()
+
 	outSlice := []*ASTNode{}
 
 	payload := unsafe.Pointer(&n.cNode.payload)
@@ -179,6 +185,8 @@ type Heading struct {
 }
 
 func (n ASTNode) Heading() Heading {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_HEADING {
 		msg := formatTypePanicMsg("Heading()", n)
 		panic(msg) // called Heading() on an Atrus AST node of type X
@@ -196,6 +204,8 @@ type Text struct {
 }
 
 func (n ASTNode) Text() Text {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_TEXT {
 		msg := formatTypePanicMsg("Text()", n)
 		panic(msg) // called Text() on an Atrus AST node of type X
@@ -215,6 +225,8 @@ type Code struct {
 }
 
 func (n ASTNode) Code() Code {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_CODE {
 		msg := formatTypePanicMsg("Code()", n)
 		panic(msg) // called Code() on an Atrus AST node of type X
@@ -235,6 +247,8 @@ type Link struct {
 }
 
 func (n ASTNode) Link() Link {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_LINK {
 		msg := formatTypePanicMsg("Link()", n)
 		panic(msg) // called Link() on an Atrus AST node of type X
@@ -255,6 +269,8 @@ type LinkDefinition struct {
 }
 
 func (n ASTNode) LinkDefinition() LinkDefinition {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_DEFINITION {
 		msg := formatTypePanicMsg("LinkDefinition()", n)
 		panic(msg) // called LinkDefinition() on an Atrus AST node of type X
@@ -276,6 +292,8 @@ type Image struct {
 }
 
 func (n ASTNode) Image() Image {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_IMAGE {
 		msg := formatTypePanicMsg("Image()", n)
 		panic(msg) // called Image() on an Atrus AST node of type X
@@ -295,6 +313,8 @@ type Container struct {
 }
 
 func (n ASTNode) Container() Container {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_CONTAINER {
 		msg := formatTypePanicMsg("Container()", n)
 		panic(msg) // called Container() on an Atrus AST node of type X
@@ -313,6 +333,8 @@ type MySTRole struct {
 }
 
 func (n ASTNode) MySTRole() MySTRole {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_MYST_ROLE {
 		msg := formatTypePanicMsg("MySTRole()", n)
 		panic(msg) // called MySTRole() on an Atrus AST node of type X
@@ -331,6 +353,8 @@ type MySTRoleError struct {
 }
 
 func (n ASTNode) MySTRoleError() MySTRoleError {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_MYST_ROLE_ERROR {
 		msg := formatTypePanicMsg("MySTRoleError()", n)
 		panic(msg) // called MySTRoleError() on an Atrus AST node of type X
@@ -348,6 +372,8 @@ type Abbreviation struct {
 }
 
 func (n ASTNode) Abbreviation() Abbreviation {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_ABBREVIATION {
 		msg := formatTypePanicMsg("Abbreviation()", n)
 		panic(msg) // called Abbreviation() on an Atrus AST node of type X
@@ -367,6 +393,8 @@ type MySTDirective struct {
 }
 
 func (n ASTNode) MySTDirective() MySTDirective {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_MYST_DIRECTIVE {
 		msg := formatTypePanicMsg("MySTDirective()", n)
 		panic(msg) // called MySTDirective() on an Atrus AST node of type X
@@ -386,6 +414,8 @@ type MySTDirectiveError struct {
 }
 
 func (n ASTNode) MySTDirectiveError() MySTDirectiveError {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_MYST_DIRECTIVE_ERROR {
 		msg := formatTypePanicMsg("MySTDirectiveError()", n)
 		panic(msg) // called MySTDirectiveError() on an Atrus AST node of type X
@@ -403,6 +433,8 @@ type Admonition struct {
 }
 
 func (n ASTNode) Admonition() Admonition {
+	n.checkFrozen()
+
 	if n.cNode.tag != C.ATRUS_NODE_TYPE_ADMONITION {
 		msg := formatTypePanicMsg("Admonition()", n)
 		panic(msg) // called Admonition() on an Atrus AST node of type X

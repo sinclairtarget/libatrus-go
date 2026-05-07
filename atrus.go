@@ -58,7 +58,11 @@ func Parse(md string, opts ParseOpts) (*ASTNode, error) {
 	// Set finalizer on root node.
 	// Root node is responsible for freeing the whole tree when it gets GC-ed.
 	runtime.SetFinalizer(node, func(n *ASTNode) {
-		C.atrus_free_exposed(n.cNode)
+		if node.Frozen() {
+			C.atrus_free(n.cOpaqueNode)
+		} else {
+			C.atrus_free_exposed(n.cNode)
+		}
 	})
 
 	return node, nil
@@ -80,11 +84,7 @@ func RenderHTML(node *ASTNode) (string, error) {
 	}
 	defer C.free(unsafe.Pointer(out))
 
-	// Get exposed node back
-	retcode = C.atrus_expose(opaqueNode, &node.cNode)
-	if retcode != 0 {
-		return "", errors.New("expose() failed")
-	}
+	node.setOpaque(opaqueNode)
 
 	return C.GoStringN(out, length), nil
 }
@@ -121,11 +121,7 @@ func RenderJSON(node *ASTNode, opts JSONOpts) (string, error) {
 	}
 	defer C.free(unsafe.Pointer(out))
 
-	// Get exposed node back
-	retcode = C.atrus_expose(opaqueNode, &node.cNode)
-	if retcode != 0 {
-		return "", errors.New("expose() failed")
-	}
+	node.setOpaque(opaqueNode)
 
 	return C.GoStringN(out, length), nil
 }
