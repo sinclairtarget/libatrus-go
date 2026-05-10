@@ -44,7 +44,6 @@ func (n ASTNode) checkFrozen() {
 // These names match the type names given in the MyST spec node index:
 // https://mystmd.org/spec/myst-schema
 func (n ASTNode) Type() string {
-	n.checkFrozen()
 	name := C.atrus_name(n.cNode.tag)
 	return C.GoString(name)
 }
@@ -52,7 +51,6 @@ func (n ASTNode) Type() string {
 // Returns a slice containing the node's children.
 //
 // If the node has no children, or is a leaf node, just returns an empty slice.
-//
 func (n ASTNode) Children() []*ASTNode {
 	n.checkFrozen()
 
