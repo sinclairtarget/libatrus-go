@@ -33,6 +33,81 @@ func TestTypeAndChildren(t *testing.T) {
 	}
 }
 
+func TestTransform(t *testing.T) {
+	root := parse(t, "# Heading\nThis is a paragraph.\n")
+
+	block := root.Children()[0]
+	nodeType := block.Type()
+	if nodeType != "block" {
+		t.Fatalf("expected type to be \"block\", but got \"%s\"", nodeType)
+	}
+
+	// Get reference to child we will replace.
+	// Not necessary for the replacement but we want to make sure we don't
+	// cause a double free by having an active reference to the replaced child.
+	paragraph := block.Children()[1]
+	nodeType = paragraph.Type()
+	if nodeType != "paragraph" {
+		t.Fatalf("expected type to be \"paragraph\", but got \"%s\"", nodeType)
+	}
+
+	html, err := atrus.CreateHTMLNode("<div class=\"foo\"><p>Hi!</p></div>")
+	if err != nil {
+		t.Fatalf("node create failed with error: %v", err)
+	}
+
+	// This invalidates `text`. The cNode pointer points to garbage.
+	block.ReplaceChild(1, html)
+
+	// Create second reference to the html node
+	html2 := block.Children()[1]
+	nodeType = html2.Type()
+	if nodeType != "html" {
+		t.Fatalf("expected type to be \"html\", but got \"%s\"", nodeType)
+	}
+	if html2.HTML().Value != html.HTML().Value {
+		t.Errorf("expected html values to be equal")
+	}
+
+	// Try rendering
+	s, err := atrus.RenderJSON(root, atrus.JSONIndent2)
+	if err != nil {
+		t.Fatalf("render failed with error: %v", err)
+	}
+
+	const expected = `{
+  "type": "root",
+  "children": [
+    {
+      "type": "block",
+      "children": [
+        {
+          "type": "heading",
+          "depth": 1,
+          "children": [
+            {
+              "type": "text",
+              "value": "Heading"
+            }
+          ]
+        },
+        {
+          "type": "html",
+          "value": "<div class=\"foo\"><p>Hi!</p></div>"
+        }
+      ]
+    }
+  ]
+}`
+	if s != expected {
+		t.Errorf(
+			"JSON string did not match. Expected:\n%s\nGot:\n%s",
+			expected,
+			s,
+		)
+	}
+}
+
 func TestHeading(t *testing.T) {
 	root := parse(t, "# Foo bar\n")
 

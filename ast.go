@@ -7,18 +7,48 @@ package atrus
 import "C"
 
 import (
+	"errors"
 	"fmt"
+	"runtime"
+	"unsafe"
 )
 
 type ASTNode struct {
 	cNode *C.struct_atrus_node
+	// We keep a reference to the parent in every node primarily to ensure that
+	// the tree is never GC-ed while we still have a reference to any subnode.
+	parent *ASTNode
 }
 
 // Wraps C AST node in a Go struct.
-func newASTNode(cNode *C.struct_atrus_node) *ASTNode {
-	return &ASTNode{
+func newASTNode(cNode *C.struct_atrus_node, parent *ASTNode) *ASTNode {
+	node := &ASTNode{
 		cNode: cNode,
+		parent: parent,
 	}
+
+	if parent == nil {
+		// Set finalizer on root node.
+		// Root node is responsible for freeing the underlying C tree when it
+		// gets GC-ed.
+		runtime.SetFinalizer(node, func(n *ASTNode) { n.release() })
+	}
+
+	return node;
+}
+
+// Frees underlying C AST.
+//
+// This will free the entire tree recursively, invalidating any other ASTNode
+// objects with pointers into the tree.
+//
+// Only works on nodes without a parent.
+func (n ASTNode) release() {
+	if n.cNode == nil || n.parent != nil {
+		return
+	}
+
+	C.atrus_free(n.cNode)
 }
 
 // Returns a type name for the node.
@@ -33,16 +63,32 @@ func (n ASTNode) Type() string {
 // Returns a slice containing the node's children.
 //
 // If the node has no children, or is a leaf node, just returns an empty slice.
-func (n ASTNode) Children() []*ASTNode {
+func (n *ASTNode) Children() []*ASTNode {
 	outSlice := []*ASTNode{}
 
 	nChildren := C.atrus_node_num_children(n.cNode)
 	for i := range nChildren {
 		child := C.atrus_node_child(n.cNode, i)
-		outSlice = append(outSlice, newASTNode(child))
+		outSlice = append(outSlice, newASTNode(child, n))
 	}
 
 	return outSlice
+}
+
+// Replaces the ith child of the given node with a new node.
+//
+// The underlying AST for the replaced node will be freed by libatrus.
+func (n *ASTNode) ReplaceChild(i uint32, newChild *ASTNode) {
+	if newChild.parent != nil {
+		panic("cannot ReplaceChild() with a node that already has a parent")
+	}
+
+	C.atrus_node_replace_child(n.cNode, C.uint(i), newChild.cNode)
+
+	// This ensures that any finalizer that might be attached to the node never
+	// frees the underlying AST, since that's now the responsibility of the
+	// root over n
+	newChild.parent = n
 }
 
 // ----------------------------------------------------------------------------
@@ -80,6 +126,32 @@ func (n ASTNode) Text() Text {
 	return Text{
 		Value: C.GoString(value),
 	}
+}
+
+func (n ASTNode) HTML() Text {
+	if C.atrus_node_type(n.cNode) != C.ATRUS_NODE_TYPE_HTML {
+		msg := formatTypePanicMsg("HTML()", n)
+		panic(msg) // called Text() on an Atrus AST node of type X
+	}
+
+	value := C.atrus_node_html_value(n.cNode)
+	return Text{
+		Value: C.GoString(value),
+	}
+}
+
+func CreateHTMLNode(value string) (*ASTNode, error) {
+	cValue := C.CString(value)
+	defer C.free(unsafe.Pointer(cValue))
+
+	var cNode *C.struct_atrus_node
+	retcode := C.atrus_node_html_create(&cNode, cValue)
+	if retcode != 0 {
+		return nil, errors.New("failed to create node")
+	}
+
+	node := newASTNode(cNode, nil)
+	return node, nil
 }
 
 type Code struct {
