@@ -9,20 +9,14 @@ import (
 const md string = "# Heading\nThis is a paragraph.\n"
 
 func TestParse(t *testing.T) {
-	opts := atrus.ParseOpts{
-		ParseLevel: atrus.ParseLevelPost,
-	}
-	_, err := atrus.Parse(md, opts)
+	_, err := atrus.Parse(md, atrus.ParseLevelPost)
 	if err != nil {
 		t.Fatalf("parse failed with error: %v", err)
 	}
 }
 
 func TestParseAndRenderHTML(t *testing.T) {
-	opts := atrus.ParseOpts{
-		ParseLevel: atrus.ParseLevelPost,
-	}
-	root, err := atrus.Parse(md, opts)
+	root, err := atrus.Parse(md, atrus.ParseLevelPost)
 	if err != nil {
 		t.Fatalf("parse failed with error: %v", err)
 	}
@@ -41,18 +35,12 @@ func TestParseAndRenderHTML(t *testing.T) {
 }
 
 func TestParseAndRenderJSON(t *testing.T) {
-	opts := atrus.ParseOpts{
-		ParseLevel: atrus.ParseLevelPost,
-	}
-	root, err := atrus.Parse(md, opts)
+	root, err := atrus.Parse(md, atrus.ParseLevelPost)
 	if err != nil {
 		t.Fatalf("parse failed with error: %v", err)
 	}
 
-	renderOpts := atrus.JSONOpts{
-		Whitespace: atrus.JSONIndent2,
-	}
-	s, err := atrus.RenderJSON(root, renderOpts)
+	s, err := atrus.RenderJSON(root, atrus.JSONIndent2)
 	if err != nil {
 		t.Fatalf("render failed with error: %v", err)
 	}

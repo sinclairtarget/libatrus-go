@@ -9,82 +9,87 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"unsafe"
 )
 
 func Version() string {
-	return C.GoString(C.atrus_version)
+	return C.GoString(C.atrus_version())
+}
+
+// Returns an error if the linked version of libatrus is older than the version
+// we were compiled against.
+func CheckLinkedVersion() error {
+	isOldEnough := C.atrus_version_at_least(
+		C.ATRUS_MAJOR_VERSION,
+		C.ATRUS_MINOR_VERSION,
+		C.ATRUS_PATCH_VERSION,
+	)
+
+	if !isOldEnough {
+		compileVersion := fmt.Sprintf(
+			"%d.%d.%d",
+			C.ATRUS_MAJOR_VERSION,
+			C.ATRUS_MINOR_VERSION,
+			C.ATRUS_PATCH_VERSION,
+		)
+		linkedVersion := Version()
+		return fmt.Errorf(
+			"linked version of libatrus (%s) is older than compile-time " +
+			"version (%s)",
+			linkedVersion,
+			compileVersion,
+		)
+	}
+
+	return nil
 }
 
 type ParseLevel C.atrus_parse_option_parse_level_t
 
 const (
-	ParseLevelBlock ParseLevel = C.ATRUS_BLOCK_PARSE_LEVEL
-	ParseLevelRaw              = C.ATRUS_RAW_PARSE_LEVEL
-	ParseLevelPre              = C.ATRUS_PRE_PARSE_LEVEL
-	ParseLevelPost             = C.ATRUS_POST_PARSE_LEVEL
+	ParseLevelBlock ParseLevel = C.ATRUS_PARSE_LEVEL_BLOCK
+	ParseLevelRaw              = C.ATRUS_PARSE_LEVEL_RAW
+	ParseLevelPre              = C.ATRUS_PARSE_LEVEL_PRE
+	ParseLevelPost             = C.ATRUS_PARSE_LEVEL_POST
 )
 
-// Options for parsing.
-type ParseOpts struct {
-	ParseLevel C.atrus_parse_option_parse_level_t
-}
-
-func Parse(md string, opts ParseOpts) (*ASTNode, error) {
+func Parse(md string, parseLevel ParseLevel) (*ASTNode, error) {
 	cMd := C.CString(md)
 	defer C.free(unsafe.Pointer(cMd))
 
-	parseOpts := C.struct_atrus_parse_opts{
-		parse_level: opts.ParseLevel,
-	}
-
-	// Parse to opaque node
-	var opaqueNode *C.struct_atrus_node_opaque
-	retcode := C.atrus_parse(cMd, &opaqueNode, &parseOpts)
+	var cNode *C.struct_atrus_node
+	retcode := C.atrus_parse(
+		cMd,
+		&cNode,
+		// Not obvious to me why this cast is necessary. We've just said above
+		// that ParseLevel is an alias for the underlying C type! But go will
+		// be unhappy without this cast.
+		(C.atrus_parse_option_parse_level_t)(parseLevel),
+	)
 	if retcode != 0 {
 		return nil, errors.New("parse failed")
 	}
 
-	// Expose
-	var exposedNode *C.struct_atrus_node
-	retcode2 := C.atrus_expose(opaqueNode, &exposedNode)
-	if retcode2 != 0 {
-		return nil, errors.New("expose() failed")
-	}
-
-	node := NewASTNode(exposedNode)
+	node := newASTNode(cNode)
 
 	// Set finalizer on root node.
 	// Root node is responsible for freeing the whole tree when it gets GC-ed.
 	runtime.SetFinalizer(node, func(n *ASTNode) {
-		if node.Frozen() {
-			C.atrus_free(n.cOpaqueNode)
-		} else {
-			C.atrus_free_exposed(n.cNode)
-		}
+		C.atrus_free(n.cNode)
 	})
 
 	return node, nil
 }
 
 func RenderHTML(node *ASTNode) (string, error) {
-	// Convert to opaque node
-	var opaqueNode *C.struct_atrus_node_opaque
-	retcode := C.atrus_adopt(node.cNode, &opaqueNode)
-	if retcode != 0 {
-		return "", errors.New("adopt() failed")
-	}
-
-	// Render
 	var out *C.char
-	length := C.atrus_render_html(opaqueNode, &out)
+	length := C.atrus_render_html(node.cNode, &out)
 	if length < 0 {
 		return "", errors.New("render html failed")
 	}
 	defer C.free(unsafe.Pointer(out))
-
-	node.setOpaque(opaqueNode)
 
 	return C.GoStringN(out, length), nil
 }
@@ -97,31 +102,20 @@ const (
 	JSONIndent4                   = C.ATRUS_JSON_INDENT_4
 )
 
-type JSONOpts struct {
-	Whitespace C.atrus_json_option_whitespace_t
-}
-
-func RenderJSON(node *ASTNode, opts JSONOpts) (string, error) {
-	// Convert to opaque node
-	var opaqueNode *C.struct_atrus_node_opaque
-	retcode := C.atrus_adopt(node.cNode, &opaqueNode)
-	if retcode != 0 {
-		return "", errors.New("adopt() failed")
-	}
-
-	// Render
+func RenderJSON(node *ASTNode, whitespace WhitespaceOption) (string, error) {
 	var out *C.char
-	renderOpts := C.struct_atrus_json_opts{
-		whitespace: opts.Whitespace,
-	}
-
-	length := C.atrus_render_json(opaqueNode, &out, &renderOpts)
+	length := C.atrus_render_json(
+		node.cNode,
+		&out,
+		// Not obvious to me why this cast is necessary. We've just said above
+		// that WhitespaceOption is an alias for the underlying C type! But go
+		// will be unhappy without this cast.
+		(C.atrus_json_option_whitespace_t)(whitespace),
+	)
 	if length < 0 {
 		return "", errors.New("render json failed")
 	}
 	defer C.free(unsafe.Pointer(out))
-
-	node.setOpaque(opaqueNode)
 
 	return C.GoStringN(out, length), nil
 }

@@ -7,10 +7,7 @@ import (
 )
 
 func parse(t *testing.T, md string) *atrus.ASTNode {
-	opts := atrus.ParseOpts{
-		ParseLevel: atrus.ParseLevelPost,
-	}
-	root, err := atrus.Parse(md, opts)
+	root, err := atrus.Parse(md, atrus.ParseLevelPost)
 	if err != nil {
 		t.Fatalf("parse failed with error: %v", err)
 	}
