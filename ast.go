@@ -77,10 +77,17 @@ func (n *ASTNode) Children() []*ASTNode {
 
 // Replaces the ith child of the given node with a new node.
 //
-// The underlying AST for the replaced node will be freed by libatrus.
+// The underlying AST for the replaced node will be freed by libatrus. The
+// replaced node is by definition a child, so it should never trigger a double
+// free of the underlying AST when it is GC-ed.
 func (n *ASTNode) ReplaceChild(i uint32, newChild *ASTNode) {
 	if newChild.parent != nil {
 		panic("cannot ReplaceChild() with a node that already has a parent")
+	}
+
+	nChildren := C.atrus_node_num_children(n.cNode)
+	if C.uint(i) >= nChildren {
+		panic("child index is out of bounds")
 	}
 
 	C.atrus_node_replace_child(n.cNode, C.uint(i), newChild.cNode)
