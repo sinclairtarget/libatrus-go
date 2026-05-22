@@ -1,6 +1,7 @@
 package atrus_test
 
 import (
+	"slices"
 	"testing"
 
 	atrus "github.com/sinclairtarget/libatrus-go"
@@ -168,6 +169,59 @@ func TestCode(t *testing.T) {
 			"expected code lang of \"%s\", but got \"%s\"",
 			expected,
 			code.Lang,
+		)
+	}
+
+	if code.Filename != "" {
+		t.Errorf("expected code filename to be an empty string")
+	}
+
+	if len(code.EmphasizeLines) != 0 {
+		t.Errorf("expected emphasize lines to be empty")
+	}
+}
+
+func TestCodeDirective(t *testing.T) {
+	root := parse(t, `:::{code} python
+:filename: foo.py
+:linenos:
+:emphasize-lines: 2-4
+def foo():
+    x = 1
+	y = x + 2
+	return x + y
+:::
+`)
+
+	// root -> mystDirective -> code
+	// TODO: Update when libatrus removes redundant directive nodes in post
+	// transforms.
+	node := root.Children()[0].Children()[0].Children()[0];
+	nodeType := node.Type()
+	if nodeType != "code" {
+		t.Fatalf("expected type to be \"code\", but got \"%s\"", nodeType)
+	}
+
+	code := node.Code()
+	if !code.ShowLineNumbers {
+		t.Errorf("expected ShowLineNumbers to be true")
+	}
+
+	expectedFilename := "foo.py"
+	if code.Filename != expectedFilename {
+		t.Errorf(
+			"expected filename to be \"%s\", but got \"%s\"",
+			expectedFilename,
+			code.Filename,
+		)
+	}
+
+	expectedEmphasizeLines := []uint{2, 3, 4};
+	if !slices.Equal(code.EmphasizeLines, expectedEmphasizeLines) {
+		t.Errorf(
+			"expected emphasize lines to be %v, but got %v",
+			expectedEmphasizeLines,
+			code.EmphasizeLines,
 		)
 	}
 }

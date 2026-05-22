@@ -165,6 +165,8 @@ type Code struct {
 	Value string
 	Lang  string
 	ShowLineNumbers bool
+	Filename string
+	EmphasizeLines []uint
 }
 
 func (n ASTNode) Code() Code {
@@ -173,14 +175,30 @@ func (n ASTNode) Code() Code {
 		panic(msg) // called Code() on an Atrus AST node of type X
 	}
 
-	value := C.atrus_node_code_value(n.cNode)
-	lang := C.atrus_node_code_lang(n.cNode)
-	showLineNumbers := C.atrus_node_code_show_line_numbers(n.cNode)
-	return Code{
-		Value: C.GoString(value),
-		Lang:  C.GoString(lang),
-		ShowLineNumbers: bool(showLineNumbers),
+	var code Code
+
+	code.Value = C.GoString(C.atrus_node_code_value(n.cNode))
+	code.Lang = C.GoString(C.atrus_node_code_lang(n.cNode))
+	code.ShowLineNumbers = bool(C.atrus_node_code_show_line_numbers(n.cNode))
+
+	filenamePtr := C.atrus_node_code_filename(n.cNode)
+	if filenamePtr != nil {
+		code.Filename = C.GoString(filenamePtr)
 	}
+
+	emphasizeLines := make([]C.uint, 256)
+	nFilled := C.atrus_node_code_emphasize_lines(
+		n.cNode,
+		&emphasizeLines[0],
+		C.size_t(cap(emphasizeLines)),
+	)
+	code.EmphasizeLines = make([]uint, nFilled)
+	for i := range nFilled {
+		lineNum := emphasizeLines[i]
+		code.EmphasizeLines[i] = uint(lineNum)
+	}
+
+	return code
 }
 
 type Link struct {
