@@ -112,4 +112,15 @@ func RenderJSON(node *ASTNode, whitespace WhitespaceOption) (string, error) {
 	return C.GoStringN(out, length), nil
 }
 
+func RenderTypst(node *ASTNode) (string, error) {
+	var out *C.char
+	length := C.atrus_render_typst(node.cNode, &out)
+	if length < 0 {
+		return "", errors.New("render typst failed")
+	}
+	defer C.free(unsafe.Pointer(out))
+
+	return C.GoStringN(out, length), nil
+}
+
 // func LoadJSON(s string) (*ASTNode, error) {}

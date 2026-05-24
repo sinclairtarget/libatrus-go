@@ -78,3 +78,22 @@ func TestParseAndRenderJSON(t *testing.T) {
 		t.Errorf("JSON string did not match. Got:\n%s", s)
 	}
 }
+
+func TestParseAndRenderTypst(t *testing.T) {
+	root, err := atrus.Parse(md, atrus.ParseLevelPost)
+	if err != nil {
+		t.Fatalf("parse failed with error: %v", err)
+	}
+
+	s, err := atrus.RenderTypst(root)
+	if err != nil {
+		t.Fatalf("render failed with error: %v", err)
+	}
+
+	const expected = `= Heading
+This is a paragraph.
+`
+	if s != expected {
+		t.Errorf("Typst string did not match. Got:\n%s", s)
+	}
+}
