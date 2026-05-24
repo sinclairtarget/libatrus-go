@@ -42,7 +42,8 @@ func newASTNode(cNode *C.struct_atrus_node, parent *ASTNode) *ASTNode {
 // This will free the entire tree recursively, invalidating any other ASTNode
 // objects with pointers into the tree.
 //
-// Only works on nodes without a parent.
+// Only works on nodes without a parent. This is very important! The root node
+// of the AST has sole reponsibility for cleaning up all its descendant nodes.
 func (n ASTNode) release() {
 	if n.cNode == nil || n.parent != nil {
 		return
@@ -75,6 +76,34 @@ func (n *ASTNode) Children() []*ASTNode {
 	return outSlice
 }
 
+// Adds a new node as the first child of this node.
+func (n *ASTNode) PrependChild(newChild *ASTNode) {
+	if newChild.parent != nil {
+		panic("cannot PrependChild() with a node that already has a parent")
+	}
+
+	retcode := C.atrus_node_prepend_child(n.cNode, newChild.cNode);
+	if retcode < 0 {
+		panic("failed to prepend child");
+	}
+
+	newChild.parent = n
+}
+
+// Adds a new node as the last child of this node.
+func (n *ASTNode) AppendChild(newChild *ASTNode) {
+	if newChild.parent != nil {
+		panic("cannot AppendChild() with a node that already has a parent")
+	}
+
+	retcode := C.atrus_node_append_child(n.cNode, newChild.cNode);
+	if retcode < 0 {
+		panic("failed to append child");
+	}
+
+	newChild.parent = n
+}
+
 // Replaces the ith child of the given node with a new node.
 //
 // The underlying AST for the replaced node will be freed by libatrus. The
@@ -92,9 +121,6 @@ func (n *ASTNode) ReplaceChild(i uint32, newChild *ASTNode) {
 
 	C.atrus_node_replace_child(n.cNode, C.uint(i), newChild.cNode)
 
-	// This ensures that any finalizer that might be attached to the node never
-	// frees the underlying AST, since that's now the responsibility of the
-	// root over n
 	newChild.parent = n
 }
 
@@ -103,6 +129,7 @@ func (n *ASTNode) ReplaceChild(i uint32, newChild *ASTNode) {
 // payloads from a node.
 // ----------------------------------------------------------------------------
 
+// --- Heading ----------------------------------------------------------------
 type Heading struct {
 	Depth C.ushort
 }
@@ -119,6 +146,18 @@ func (n ASTNode) Heading() Heading {
 	}
 }
 
+func CreateHeadingNode(depth uint) (*ASTNode, error) {
+	var cNode *C.struct_atrus_node
+	retcode := C.atrus_node_heading_create(&cNode, C.uint(depth))
+	if retcode != 0 {
+		return nil, errors.New("failed to create node")
+	}
+
+	node := newASTNode(cNode, nil)
+	return node, nil
+}
+
+// --- Text -------------------------------------------------------------------
 type Text struct {
 	Value string
 }
@@ -135,6 +174,21 @@ func (n ASTNode) Text() Text {
 	}
 }
 
+func CreateTextNode(value string) (*ASTNode, error) {
+	cValue := C.CString(value)
+	defer C.free(unsafe.Pointer(cValue))
+
+	var cNode *C.struct_atrus_node
+	retcode := C.atrus_node_text_create(&cNode, cValue)
+	if retcode != 0 {
+		return nil, errors.New("failed to create node")
+	}
+
+	node := newASTNode(cNode, nil)
+	return node, nil
+}
+
+// --- HTML -------------------------------------------------------------------
 func (n ASTNode) HTML() Text {
 	if C.atrus_node_type(n.cNode) != C.ATRUS_NODE_TYPE_HTML {
 		msg := formatTypePanicMsg("HTML()", n)
@@ -161,6 +215,7 @@ func CreateHTMLNode(value string) (*ASTNode, error) {
 	return node, nil
 }
 
+// --- Code -------------------------------------------------------------------
 type Code struct {
 	Value string
 	Lang  string
@@ -201,6 +256,7 @@ func (n ASTNode) Code() Code {
 	return code
 }
 
+// --- Link -------------------------------------------------------------------
 type Link struct {
 	URL   string
 	Title string
@@ -220,6 +276,7 @@ func (n ASTNode) Link() Link {
 	}
 }
 
+// --- Definition -------------------------------------------------------------
 type LinkDefinition struct {
 	URL string
 	Title string
@@ -242,6 +299,7 @@ func (n ASTNode) LinkDefinition() LinkDefinition {
 	}
 }
 
+// --- Image ------------------------------------------------------------------
 type Image struct {
 	URL   string
 	Title string
@@ -264,6 +322,7 @@ func (n ASTNode) Image() Image {
 	}
 }
 
+// --- Container --------------------------------------------------------------
 type Container struct {
 	Kind string
 }
@@ -280,6 +339,7 @@ func (n ASTNode) Container() Container {
 	}
 }
 
+// --- MyST Role --------------------------------------------------------------
 type MySTRole struct {
 	Name string
 	Value string
@@ -299,6 +359,7 @@ func (n ASTNode) MySTRole() MySTRole {
 	}
 }
 
+// --- MyST Role Error --------------------------------------------------------
 type MySTRoleError struct {
 	Value string
 }
@@ -315,6 +376,7 @@ func (n ASTNode) MySTRoleError() MySTRoleError {
 	}
 }
 
+// --- Abbreviation ------------------------------------------------------------
 type Abbreviation struct {
 	Title string
 }
@@ -331,6 +393,7 @@ func (n ASTNode) Abbreviation() Abbreviation {
 	}
 }
 
+// --- MyST Directive ---------------------------------------------------------
 type MySTDirective struct {
 	Name string
 	Args string
@@ -353,6 +416,7 @@ func (n ASTNode) MySTDirective() MySTDirective {
 	}
 }
 
+// --- MyST Directive Error ---------------------------------------------------
 type MySTDirectiveError struct {
 	Message string
 }
@@ -369,6 +433,7 @@ func (n ASTNode) MySTDirectiveError() MySTDirectiveError {
 	}
 }
 
+// --- Admonition -------------------------------------------------------------
 type Admonition struct {
 	Kind string
 }

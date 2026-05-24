@@ -34,6 +34,81 @@ func TestTypeAndChildren(t *testing.T) {
 	}
 }
 
+func TestAddChildren(t *testing.T) {
+	root := parse(t, "# Heading\nThis is a paragraph.\n")
+
+	block := root.Children()[0]
+	nodeType := block.Type()
+	if nodeType != "block" {
+		t.Fatalf("expected type to be \"block\", but got \"%s\"", nodeType)
+	}
+
+	newHeading, err := atrus.CreateHeadingNode(2)
+	if err != nil {
+		t.Fatalf("failed to create heading node: %v", err)
+	}
+	newText, err := atrus.CreateTextNode("Subheading")
+	if err != nil {
+		t.Fatalf("failed to create text node: %v", err)
+	}
+
+	newHeading.PrependChild(newText)
+	block.AppendChild(newHeading)
+
+	// Try rendering
+	s, err := atrus.RenderJSON(root, atrus.JSONIndent2)
+	if err != nil {
+		t.Fatalf("render failed with error: %v", err)
+	}
+
+	const expected = `{
+  "type": "root",
+  "children": [
+    {
+      "type": "block",
+      "children": [
+        {
+          "type": "heading",
+          "depth": 1,
+          "children": [
+            {
+              "type": "text",
+              "value": "Heading"
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "This is a paragraph."
+            }
+          ]
+        },
+        {
+          "type": "heading",
+          "depth": 2,
+          "children": [
+            {
+              "type": "text",
+              "value": "Subheading"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}`
+	if s != expected {
+		t.Errorf(
+			"JSON string did not match. Expected:\n%s\nGot:\n%s",
+			expected,
+			s,
+		)
+	}
+}
+
 func TestTransform(t *testing.T) {
 	root := parse(t, "# Heading\nThis is a paragraph.\n")
 
@@ -44,8 +119,8 @@ func TestTransform(t *testing.T) {
 	}
 
 	// Get reference to child we will replace.
-	// Not necessary for the replacement but we want to make sure we don't
-	// cause a double free by having an active reference to the replaced child.
+	// Not necessary for the replacement but we want to test that we don't get
+	// a double free when this var goes out of scope.
 	paragraph := block.Children()[1]
 	nodeType = paragraph.Type()
 	if nodeType != "paragraph" {
